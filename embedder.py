@@ -1,13 +1,3 @@
-"""
-embedder.py
-===========
-Proper embedding via Ollama's /api/embed endpoint (batch-native).
-Model: nomic-embed-text (nomic-embed-text-v1.5, 768-dim, 8192 ctx)
-
-Ollama's /api/embed accepts a list of strings in one call — we use this
-to avoid N round-trips for large ingestion jobs.
-"""
-
 from __future__ import annotations
 
 import json
@@ -24,21 +14,6 @@ OLLAMA_BASE = "http://localhost:11434"
 
 
 class OllamaEmbedder:
-    """
-    Batch embedder backed by Ollama's /api/embed endpoint.
-
-    Parameters
-    ----------
-    model : str
-        Ollama model tag, e.g. "nomic-embed-text".
-    base_url : str
-        Ollama server base URL.
-    batch_size : int
-        Max texts per HTTP request. Ollama handles batches natively.
-    retry : int
-        Number of retries on transient errors.
-    """
-
     def __init__(
         self,
         model: str = EMBED_MODEL_DEFAULT,
@@ -52,16 +27,8 @@ class OllamaEmbedder:
         self.retry = retry
         self._dim: int | None = None
 
-    # ── public ────────────────────────────────────────────────────────────
 
     def embed(self, texts: Sequence[str]) -> np.ndarray:
-        """
-        Embed a list of strings.
-
-        Returns
-        -------
-        np.ndarray  shape (N, D), dtype float32, L2-normalised
-        """
         if not texts:
             raise ValueError("texts must be non-empty")
 
@@ -77,14 +44,11 @@ class OllamaEmbedder:
         return self._l2_norm(mat)
 
     def embed_query(self, text: str) -> np.ndarray:
-        """Embed a single query string. Returns shape (D,)."""
-        # nomic-embed-text uses a search_query prefix for asymmetric retrieval
         prefixed = f"search_query: {text}"
         return self.embed([prefixed])[0]
 
     def embed_documents(self, texts: Sequence[str]) -> np.ndarray:
         """Embed passage/document strings. Returns shape (N, D)."""
-        # nomic-embed-text uses search_document prefix for passages
         prefixed = [f"search_document: {t}" for t in texts]
         return self.embed(prefixed)
 
@@ -95,11 +59,7 @@ class OllamaEmbedder:
             self._dim = v.shape[0]
         return self._dim
 
-    # ── internal ──────────────────────────────────────────────────────────
-
     def _embed_batch(self, texts: list[str]) -> np.ndarray:
-        # Try modern batch endpoint first (/api/embed, Ollama >= 0.1.26),
-        # fall back to legacy single-text endpoint (/api/embeddings).
         try:
             return self._embed_batch_modern(texts)
         except urllib.error.HTTPError as e:
@@ -119,10 +79,10 @@ class OllamaEmbedder:
                 )
                 with urllib.request.urlopen(req, timeout=500) as r:
                     resp = json.loads(r.read())
-                # {"embeddings": [[...], [...]]}
+
                 return np.array(resp["embeddings"], dtype=np.float32)
             except urllib.error.HTTPError:
-                raise   # let caller decide (404 → fallback)
+                raise  
             except urllib.error.URLError as e:
                 if attempt == self.retry - 1:
                     raise ConnectionError(
