@@ -1,16 +1,3 @@
-"""
-pdf_loader.py
-=============
-PDF ingestion using pypdf with LangChain text splitting strategies.
-
-Features:
-- Page-level and paragraph-level text extraction
-- Smart recursive chunking using LangChain's RecursiveCharacterTextSplitter
-- Support for multiple chunking strategies
-- Metadata extraction (title, author, pages, source filename)
-- Multi-PDF batch ingestion
-"""
-
 from __future__ import annotations
 
 import re
@@ -27,22 +14,8 @@ from vector_store import Document
 
 @dataclass
 class ChunkConfig:
-    """Configuration for LangChain-based text chunking.
-    
-    Parameters
-    ----------
-    chunk_size : int
-        Target characters per chunk (default: 1000).
-        LangChain splitters use character count, not word count.
-    chunk_overlap : int
-        Character overlap between adjacent chunks (default: 200).
-    separators : list[str]
-        Ordered list of separators to split on. RecursiveCharacterTextSplitter
-        will try each separator in order. Default handles paragraphs, sentences, words.
-    """
-    chunk_size: int = 1000           # target characters per chunk
+    chunk_size: int = 600           # target characters per chunk
     chunk_overlap: int = 200         # characters of overlap between chunks
-    # Separators for RecursiveCharacterTextSplitter: try in order
     separators: list[str] = field(default_factory=lambda: [
         "\n\n",                       # paragraph breaks
         "\n",                         # line breaks
@@ -66,7 +39,6 @@ def _chunk_text(
     source: str = "",
     page_start: int = 0,
 ) -> list[Document]:
-    """Chunk text using LangChain's RecursiveCharacterTextSplitter."""
     if not text.strip():
         return []
 
@@ -132,11 +104,9 @@ class PDFLoader:
             print(f"  ⚠ No extractable text in {source}")
             return []
 
-        # Concatenate with page markers, then chunk globally
-        # (cross-page chunking gives better context than per-page chunks)
         full_text = " ".join(text for _, text in pages_text)
         chunks = _chunk_text(full_text, self.cfg, source=source)
 
         char_count = len(full_text)
-        print(f"  ✓ {source}: extracted {char_count} chars → {len(chunks)} chunks (LangChain RecursiveCharacterTextSplitter)")
+        print(f"{source}: extracted {char_count} chars → {len(chunks)} chunks ")
         return chunks
