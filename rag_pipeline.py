@@ -1,24 +1,3 @@
-"""
-rag_pipeline.py
-===============
-End-to-end RAG pipeline:
-
-  PDF / text  →  PDFLoader  →  chunks (Documents)
-                                    │
-                              OllamaEmbedder
-                            (mxbai-embed-large)
-                                    │
-                              VectorStore (disk-persisted)
-                            dense + BM25 hybrid retrieval
-                                    │
-                              BGEReranker
-                           (bge-reranker-v2-m3)
-                                    │
-                            LLM (any Ollama model)
-                                    │
-                               Final Answer
-"""
-
 from __future__ import annotations
 
 import json
@@ -43,9 +22,6 @@ You are a precise, helpful research assistant. Answer the user's question \
 using ONLY the retrieved context passages below. \
 Cite passage numbers as [P1], [P2] etc. \
 If the context is insufficient, say so clearly — do not hallucinate."""
-
-
-# ─── LLM generation (Ollama chat) ─────────────────────────────────────────────
 
 def _ollama_chat(
     messages: list[dict],
@@ -74,43 +50,15 @@ def _ollama_chat(
         raise ConnectionError(f"Ollama LLM unreachable: {e}") from e
 
 
-# ─── RAGPipeline ──────────────────────────────────────────────────────────────
-
 class RAGPipeline:
-    """
-    Full RAG pipeline with persistent vector store and BGE reranker.
-
-    Parameters
-    ----------
-    store_dir : str | Path
-        Where to persist the vector database (created if absent).
-    llm_model : str
-        Ollama model for generation (e.g. "llama3", "mistral", "phi4").
-    embed_model : str
-        Ollama embedding model (default: "mxbai-embed-large").
-    rerank_model : str
-        Ollama reranker model (default: "qllama/bge-reranker-v2-m3").
-    retrieval_k : int
-        Number of candidates from hybrid retrieval before reranking.
-    rerank_top_n : int
-        Passages kept after reranking (passed to the LLM).
-    hybrid_alpha : float
-        Dense/sparse balance: 1.0 = pure dense, 0.0 = pure BM25.
-    chunk_size : int
-        Target words per chunk during PDF ingestion.
-    chunk_overlap : int
-        Word overlap between adjacent chunks.
-    embed_batch_size : int
-        Texts per embedding API call.
-    """
-
+    
     def __init__(
         self,
         store_dir: str | Path = "./rag_db",
         llm_model: str = "mistral",
         embed_model: str = "mxbai-embed-large",
         rerank_model: str = "qllama/bge-reranker-v2-m3",
-        retrieval_k: int = 20,
+        retrieval_k: int = 10,
         rerank_top_n: int = 5,
         hybrid_alpha: float = 0.6,
         chunk_size: int = 512,
@@ -136,7 +84,6 @@ class RAGPipeline:
             chunk_overlap=chunk_overlap,
         ))
 
-    # ── Ingestion ─────────────────────────────────────────────────────────
 
     def ingest_pdf(self, path: str | Path, save: bool = True) -> int:
         """Ingest a single PDF. Returns number of chunks added."""
@@ -238,19 +185,7 @@ class RAGPipeline:
         verbose: bool = True,
         temperature: float = 0.1,
     ) -> dict:
-        """
-        Full pipeline: embed → hybrid retrieve → BGE rerank → generate.
-
-        Returns
-        -------
-        dict with keys:
-          answer         : str — the LLM-generated answer
-          sources        : list[Document] — top-N passages used
-          rerank_scores  : list[float]
-          retrieval_time : float (seconds)
-          rerank_time    : float (seconds)
-          generate_time  : float (seconds)
-        """
+      
         if self.store.count == 0:
             raise RuntimeError("No documents indexed. Call ingest_* first.")
 
@@ -321,7 +256,7 @@ class RAGPipeline:
             "generate_time": generate_time,
         }
 
-    # ── Utilities ─────────────────────────────────────────────────────────
+
 
     def stats(self) -> dict:
         """Return index statistics."""
